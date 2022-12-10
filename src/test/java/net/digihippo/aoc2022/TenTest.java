@@ -1,7 +1,5 @@
 package net.digihippo.aoc2022;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 class TenTest extends TestTemplate<Integer, String> {
     private static final String EXAMPLE_INPUT = """
             addx 15
