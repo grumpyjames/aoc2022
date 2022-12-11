@@ -2,7 +2,6 @@ package net.digihippo.aoc2022;
 
 import java.util.*;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -14,28 +13,34 @@ public class Eleven extends SolutionTemplate<Long, Long> {
         private final int index;
         private final Deque<Long> items;
         private final Function<Long, Long> operation;
-        private final Predicate<Long> test;
+        private final long test;
         private final int onTrue;
         private final int onFalse;
         private final int worryDivisor;
 
         private long inspectionCount = 0;
+        private long magicValue;
 
         Monkey(
                 int index,
                 Deque<Long> items,
                 Function<Long, Long> operation,
-                Predicate<Long> test,
+                long modulo,
                 int onTrue,
                 int onFalse,
                 int worryDivisor) {
             this.index = index;
             this.items = items;
             this.operation = operation;
-            this.test = test;
+            this.test = modulo;
             this.onTrue = onTrue;
             this.onFalse = onFalse;
             this.worryDivisor = worryDivisor;
+        }
+
+        void setMagicValue(long magicValue)
+        {
+            this.magicValue = magicValue;
         }
 
         void takeTurn(List<Monkey> monkeys)
@@ -45,8 +50,12 @@ public class Eleven extends SolutionTemplate<Long, Long> {
                 inspectionCount++;
                 long worryLevel = items.pop();
                 long newWorryLevel = operation.apply(worryLevel) / worryDivisor;
-                if (test.test(newWorryLevel)) {
-                    monkeys.get(onTrue).onItem(newWorryLevel);
+                if (newWorryLevel % test == 0) {
+                    if (worryDivisor == 1) {
+                        monkeys.get(onTrue).onItem(newWorryLevel);
+                    } else {
+                        monkeys.get(onTrue).onItem(newWorryLevel);
+                    }
                 } else {
                     monkeys.get(onFalse).onItem(newWorryLevel);
                 }
@@ -54,7 +63,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
         }
 
         private void onItem(long newWorryLevel) {
-            items.addLast(newWorryLevel);
+            items.addLast(newWorryLevel % magicValue);
         }
     }
 
@@ -113,7 +122,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
         private int index;
         private List<Integer> items;
         private Function<Long, Long> operation;
-        private Predicate<Long> test;
+        private long test;
         private int onTrue;
         private int onFalse;
         private int worryDivisor;
@@ -133,7 +142,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             return this;
         }
 
-        public MonkeyBuilder setTest(Predicate<Long> test) {
+        public MonkeyBuilder setTest(long test) {
             this.test = test;
             return this;
         }
@@ -170,18 +179,24 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             state = State.Index;
             mb = new MonkeyBuilder();
             count = 0;
-            op = Pattern.compile("(old|[0-9]+) (\\*|\\+) (old|[0-9]+)");
+            op = Pattern.compile("(old|[0-9]+) ([*+]) (old|[0-9]+)");
             monkeys = new ArrayList<>();
         }
 
         @Override
         public Long result() {
+            long magic = 1;
+            for (Monkey monkey : monkeys) {
+                magic *= monkey.test;
+            }
+
+            for (Monkey m : monkeys) {
+                m.setMagicValue(magic);
+            }
+
             for (int i = 0; i < rounds; i++) {
                 for (Monkey monkey : monkeys) {
                     monkey.takeTurn(monkeys);
-                    if (i == 19) {
-                        System.out.println("Monkey " + monkey.index + " inspected items " + monkey.inspectionCount + " times");
-                    }
                 }
             }
 
@@ -220,7 +235,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
                 case Test -> {
                     String divStr = s.replaceAll("  Test: divisible by ", "");
                     long divisor = Long.parseLong(divStr);
-                    mb.setTest(worry -> worry % divisor == 0);
+                    mb.setTest(divisor);
                     state = State.True;
                 }
                 case True -> {
