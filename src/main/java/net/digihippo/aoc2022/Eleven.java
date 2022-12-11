@@ -1,5 +1,6 @@
 package net.digihippo.aoc2022;
 
+import java.math.BigInteger;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -12,20 +13,21 @@ public class Eleven extends SolutionTemplate<Long, Long> {
     static final class Monkey
     {
         private final int index;
-        private final Deque<Long> items;
-        private final Function<Long, Long> operation;
-        private final Predicate<Long> test;
+        private final Deque<BigInteger> items;
+        private final Function<BigInteger, BigInteger> operation;
+        private final Predicate<BigInteger> test;
         private final int onTrue;
         private final int onFalse;
         private final int worryDivisor;
+        private final BigInteger worryDiv;
 
         private long inspectionCount = 0;
 
         Monkey(
                 int index,
-                Deque<Long> items,
-                Function<Long, Long> operation,
-                Predicate<Long> test,
+                Deque<BigInteger> items,
+                Function<BigInteger, BigInteger> operation,
+                Predicate<BigInteger> test,
                 int onTrue,
                 int onFalse,
                 int worryDivisor) {
@@ -36,6 +38,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             this.onTrue = onTrue;
             this.onFalse = onFalse;
             this.worryDivisor = worryDivisor;
+            worryDiv = BigInteger.valueOf(worryDivisor);
         }
 
         void takeTurn(List<Monkey> monkeys)
@@ -43,8 +46,8 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             while (!items.isEmpty())
             {
                 inspectionCount++;
-                long worryLevel = items.pop();
-                long newWorryLevel = operation.apply(worryLevel) / worryDivisor;
+                BigInteger worryLevel = items.pop();
+                BigInteger newWorryLevel = operation.apply(worryLevel).divide(worryDiv);
                 if (test.test(newWorryLevel)) {
                     monkeys.get(onTrue).onItem(newWorryLevel);
                 } else {
@@ -53,7 +56,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             }
         }
 
-        private void onItem(long newWorryLevel) {
+        private void onItem(BigInteger newWorryLevel) {
             items.addLast(newWorryLevel);
         }
     }
@@ -78,7 +81,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
         return new MonkeyBusiness(10000, 1);
     }
 
-    private Function<Long, Long> toOperation(Matcher matcher) {
+    private Function<BigInteger, BigInteger> toOperation(Matcher matcher) {
         if (matcher.find())
         {
             final String operand = matcher.group(2);
@@ -87,20 +90,20 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             if (argTwo.equals("old"))
             {
                 if (operand.equals("+")) {
-                    return old -> old + old;
+                    return old -> old.add(old);
                 }
                 else if (operand.equals("*")) {
-                    return old -> old * old;
+                    return old -> old.multiply(old);
                 }
             }
             else
             {
-                long argTwoLong = Long.parseLong(argTwo);
+                BigInteger argTwoBigInt = BigInteger.valueOf(Long.parseLong(argTwo));
                 if (operand.equals("+")) {
-                    return old -> old + argTwoLong;
+                    return old -> old.add(argTwoBigInt);
                 }
                 else if (operand.equals("*")) {
-                    return old -> old * argTwoLong;
+                    return old -> old.multiply(argTwoBigInt);
                 }
             }
 
@@ -112,8 +115,8 @@ public class Eleven extends SolutionTemplate<Long, Long> {
     public static class MonkeyBuilder {
         private int index;
         private List<Integer> items;
-        private Function<Long, Long> operation;
-        private Predicate<Long> test;
+        private Function<BigInteger, BigInteger> operation;
+        private Predicate<BigInteger> test;
         private int onTrue;
         private int onFalse;
         private int worryDivisor;
@@ -128,12 +131,12 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             return this;
         }
 
-        public MonkeyBuilder setOperation(Function<Long, Long> operation) {
+        public MonkeyBuilder setOperation(Function<BigInteger, BigInteger> operation) {
             this.operation = operation;
             return this;
         }
 
-        public MonkeyBuilder setTest(Predicate<Long> test) {
+        public MonkeyBuilder setTest(Predicate<BigInteger> test) {
             this.test = test;
             return this;
         }
@@ -149,8 +152,8 @@ public class Eleven extends SolutionTemplate<Long, Long> {
         }
 
         public Monkey createMonkey() {
-            final Deque<Long> itemDeque = new ArrayDeque<>();
-            items.forEach(intItem -> itemDeque.addLast((long) intItem));
+            final Deque<BigInteger> itemDeque = new ArrayDeque<>();
+            items.forEach(intItem -> itemDeque.addLast(BigInteger.valueOf((long) intItem)));
 
             return new Monkey(index, itemDeque, operation, test, onTrue, onFalse, worryDivisor);
         }
@@ -179,7 +182,7 @@ public class Eleven extends SolutionTemplate<Long, Long> {
             for (int i = 0; i < rounds; i++) {
                 for (Monkey monkey : monkeys) {
                     monkey.takeTurn(monkeys);
-                    if (i == 19) {
+                    if (i == 999) {
                         System.out.println("Monkey " + monkey.index + " inspected items " + monkey.inspectionCount + " times");
                     }
                 }
@@ -219,8 +222,8 @@ public class Eleven extends SolutionTemplate<Long, Long> {
                 }
                 case Test -> {
                     String divStr = s.replaceAll("  Test: divisible by ", "");
-                    long divisor = Long.parseLong(divStr);
-                    mb.setTest(worry -> worry % divisor == 0);
+                    BigInteger divisor = BigInteger.valueOf(Long.parseLong(divStr));
+                    mb.setTest(worry -> worry.mod(divisor).equals(BigInteger.ZERO));
                     state = State.True;
                 }
                 case True -> {
