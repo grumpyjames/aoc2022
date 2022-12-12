@@ -8,6 +8,6 @@ class TwelveTest extends TestTemplate<Integer, Integer> {
             acctuvwj
             abdefghi""";
     public TwelveTest() {
-        super(new Twelve(), EXAMPLE_INPUT, 31, 31, "twelve.txt");
+        super(new Twelve(), EXAMPLE_INPUT, 31, 29, "twelve.txt");
     }
 }
