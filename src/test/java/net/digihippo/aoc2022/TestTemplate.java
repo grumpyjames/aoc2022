@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public abstract class TestTemplate<T1, T2> {
     protected final SolutionTemplate<T1, T2> solution;
-    private final String exampleInput;
+    protected final String exampleInput;
     private final T1 exampleOneAnswer;
-    private final T2 exampleTwoAnswer;
+    protected final T2 exampleTwoAnswer;
     private final String puzzleFileName;
 
     protected TestTemplate(
