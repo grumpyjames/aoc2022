@@ -1,7 +1,5 @@
 package net.digihippo.aoc2022;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 class SixteenTest extends TestTemplate<Integer, Integer> {
     private static final String EXAMPLE_INPUT = """
             Valve AA has flow rate=0; tunnels lead to valves DD, II, BB

@@ -5,7 +5,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Sixteen extends SolutionTemplate<Integer, Integer> {
-    private static final class Valve {
+    private static final class Valve implements WorkItem {
         private final String name;
         private final int pressure;
         private boolean on = false;
@@ -108,14 +108,56 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         }
     }
 
+    record Connection(int cost, String to) {}
+
+    sealed interface WorkItem permits Valve, Pending {}
+
+    record Pending(Valve upstream, Valve lastSeen, int distance) implements WorkItem {}
+
     @Override
     Solution<Integer> partOne() {
         return new Solution<>() {
             private final Map<String, Valve> valves = new HashMap<>();
             private final Map<String, List<String>> adjacent = new HashMap<>();
+            private final Map<String, Set<Connection>> connections = new HashMap<>();
 
             @Override
             public Integer result() {
+                // first off, let's simplify the graph, getting rid of the 0 flow nodes.
+                final Deque<WorkItem> queue = new ArrayDeque<>();
+                final Set<Valve> visited = new HashSet<>();
+                queue.add(valves.get("AA"));
+                while (!queue.isEmpty()) {
+                    WorkItem v = queue.poll();
+                    if (v instanceof Valve parent) {
+                        if (visited.add(parent)) {
+                            List<String> connected = adjacent.get(parent.name);
+                            for (String name : connected) {
+                                Valve valve = valves.get(name);
+                                if (valve.pressure > 0) {
+                                    connect(parent, name, 1);
+                                    queue.push(valve);
+                                } else {
+                                    queue.push(new Pending(parent, valve, 1));
+                                }
+                            }
+                        }
+                    } else if (v instanceof Pending p) {
+                        if (visited.add(p.lastSeen)) {
+                            List<String> connected = adjacent.get(p.lastSeen.name);
+                            for (String name : connected) {
+                                Valve valve = valves.get(name);
+                                if (valve.pressure > 0) {
+                                    connect(p.upstream, name, p.distance + 1);
+                                    queue.push(valve);
+                                } else {
+                                    queue.push(new Pending(p.upstream, valve, 1));
+                                }
+                            }
+                        }
+                    }
+                }
+
                 String currentRoom = "AA";
 
                 int time = 0;
@@ -136,6 +178,18 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 }
 
                 return 42;
+            }
+
+            private void connect(Valve parent, String name, int cost) {
+                if (parent.name.equals(name)) {
+                    return;
+                }
+
+                connections.putIfAbsent(parent.name, new HashSet<>());
+                connections.get(parent.name).add(new Connection(cost, name));
+
+                connections.putIfAbsent(name, new HashSet<>());
+                connections.get(name).add(new Connection(cost, parent.name));
             }
 
             private int turnValveOn(int time, Valve valve) {
