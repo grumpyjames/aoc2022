@@ -1,7 +1,5 @@
 package net.digihippo.aoc2022;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 class EighteenTest extends TestTemplate<Integer, Integer> {
     private static final String EXAMPLE_INPUT = """
             2,2,2
@@ -19,6 +17,6 @@ class EighteenTest extends TestTemplate<Integer, Integer> {
             2,3,5""";
 
     public EighteenTest() {
-        super(new Eighteen(), EXAMPLE_INPUT, 64, 10, "eighteen.txt");
+        super(new Eighteen(), EXAMPLE_INPUT, 64, 58, "eighteen.txt");
     }
 }
