@@ -51,8 +51,6 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
         Path add(Valve valve);
 
-        boolean worthTurning();
-
         int pressure();
 
         String head();
@@ -64,11 +62,6 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         @Override
         public Path add(Valve valve) {
             return new Tail(this, valve);
-        }
-
-        @Override
-        public boolean worthTurning() {
-            return tail.worthTurning();
         }
 
         @Override
@@ -93,11 +86,6 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         }
 
         @Override
-        public boolean worthTurning() {
-            return false;
-        }
-
-        @Override
         public int pressure() {
             return 0;
         }
@@ -113,108 +101,54 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         }
     }
 
-    record Connection(int cost, String to) {}
+    record Connection(int cost, Valve to) {}
 
     sealed interface WorkItem permits Valve, Pending {}
 
-    record Pending(Valve upstream, Valve lastSeen, int distance) implements WorkItem {}
-
-    record ScoreItem(Valve v, double weight) {};
-
-    record ShortestPath(int distance, List<Valve> path) {
-        public ShortestPath add(int cost, Valve n) {
-            final List<Valve> newPath = new ArrayList<>(this.path);
-            newPath.add(n);
-            return new ShortestPath(distance + cost, newPath);
-        }
-
-        public ShortestPath[] split(Valve valve, Map<String, Set<Connection>> connections) {
-            boolean first = true;
-            ShortestPath before = new ShortestPath(0, new ArrayList<>());
-            ShortestPath after = new ShortestPath(0, new ArrayList<>());
-
-
-            for (int i = path.size() - 2; i >= 0; i--) {
-                Valve previous = this.path.get(i + 1);
-                Valve now = this.path.get(i);
-
-                Set<Connection> cs = connections.get(previous.name);
-                int cost = cs
-                        .stream()
-                        .filter(c -> c.to.equals(now.name))
-                        .findFirst()
-                        .get()
-                        .cost;
-
-                if (first) {
-                    before = before.add(cost, previous);
-                } else {
-                    after = after.add(cost, previous);
-                }
-
-                if (now.equals(valve)) {
-                    before = before.add(0, now);
-                    first = false;
-                }
-            }
-            after = after.add(0, this.path.get(0));
-
-            return new ShortestPath[] {before, after};
-        }
-    }
+    record Pending(Valve upstream, List<Valve> seen, int distance) implements WorkItem {}
 
     record Best(Valve v, int score) {}
 
     @Override
     Solution<Integer> partOne() {
-        return new Solution<Integer>() {
+        return new Solution<>() {
             private final Map<String, Valve> valves = new HashMap<>();
             private final Map<String, List<String>> adjacent = new HashMap<>();
-            private final Map<String, Set<Connection>> connections = new HashMap<>();
+            private final Map<Valve, Set<Connection>> connections = new HashMap<>();
 
             @Override
             public Integer result() {
                 // first off, let's simplify the graph, getting rid of the 0 flow nodes.
                 simplifyGraph();
 
-                final List<Valve> visitOrder = visitWorthyValves();
-
-                final Map<Valve, Map<Valve, ShortestPath>> allShortestPaths = new HashMap<>();
-                Valve aa = valves.get("AA");
-                Map<Valve, ShortestPath> paths = findShortestPaths(
-                        new HashSet<>(visitWorthyValves()),
-                        this.connections,
-                        aa
-                );
-                allShortestPaths.put(aa, paths);
-                for (Valve valve : visitOrder) {
-                    allShortestPaths.put(
-                            valve,
-                            findShortestPaths(new HashSet<>(valves.values()), this.connections, valve));
+                final Map<Valve, Map<Valve, Integer>> allShortestPaths = new HashMap<>();
+                final Map<Valve, Set<Connection>> altConns = connecto(valves, adjacent);
+                for (Valve valve : valves.values()) {
+                    Map<Valve, Integer> shortestPaths =
+                            findShortestPaths(new HashSet<>(valves.values()), altConns, valve);
+                    allShortestPaths.put(valve, shortestPaths);
                 }
 
-                visitOrder.sort((o1, o2) -> {
-                    int o1Distance = paths.get(o1).distance;
-                    int o2Distance = paths.get(o2).distance;
-                    if (o1Distance < o2Distance) {
-                        return o2.pressure - ((1 + (o2Distance - o1Distance)) * o1.pressure);
-                    } else if (o2Distance < o1Distance) {
-                        return -(o1.pressure - ((1 + (o1Distance - o2Distance)) * o2.pressure));
+                Iterator<Map.Entry<Valve, Map<Valve, Integer>>> iterator = allShortestPaths.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Valve, Map<Valve, Integer>> e = iterator.next();
+                    if (e.getKey().worthTurning() || e.getKey().name.equals("AA")) {
+                        Map<Valve, Integer> value = e.getValue();
+                        value.entrySet().removeIf(f -> !f.getKey().worthTurning() && !f.getKey().name.equals("AA"));
                     } else {
-                        return o2.pressure - o1.pressure;
+                        iterator.remove();
                     }
-                });
+                }
 
 
                 int time = 0;
-                Valve currentValve = aa;
+                Valve currentValve = valves.get("AA");
 
                 while (time < 30) {
                     Best bestScore = findBestScore(currentValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 30 - time);
                     Valve valve = bestScore.v;
                     if (valve != null) {
-                        ShortestPath shortestPath = allShortestPaths.get(currentValve).get(valve);
-                        int distance = shortestPath.distance;
+                        int distance = allShortestPaths.get(currentValve).get(valve);
                         time = moveTo(time, distance, valve);
                         time = turnValveOn(time, valve);
                         valve.turn();
@@ -227,27 +161,54 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 return pressure;
             }
 
+            private Map<Valve, Set<Connection>> connecto(
+                    Map<String, Valve> valves,
+                    Map<String, List<String>> adjacent) {
+                final Map<Valve, Set<Connection>> result = new HashMap<>();
+
+                for (Map.Entry<String, List<String>> entry : adjacent.entrySet()) {
+                    String fromName = entry.getKey();
+                    Valve from = valves.get(fromName);
+
+                    HashSet<Connection> cs = new HashSet<>();
+                    for (String to : entry.getValue()) {
+                        cs.add(new Connection(1, valves.get(to)));
+                    }
+
+                    result.put(from, cs);
+                }
+
+                return result;
+            }
+
             private ArrayList<Valve> visitWorthyValves() {
-                return new ArrayList<>(valves.values().stream().filter(Valve::worthTurning).toList());
+                return new ArrayList<>(connections.keySet().stream().filter(Valve::worthTurning).toList());
             }
 
             private Best findBestScore(
-                    Valve to,
+                    Valve from,
                     Set<Valve> all,
-                    Map<Valve, Map<Valve, ShortestPath>> allShortestPaths,
+                    Map<Valve, Map<Valve, Integer>> allShortestPaths,
                     int timeRemaining) {
                 int best = 0;
                 Valve bestValve = null;
                 for (Valve valve : all) {
-                    if (!valve.equals(to)) {
+                    if (!valve.equals(from)) {
                         int score = 0;
                         if (timeRemaining > 0) {
                             int timeToOpenOneValve = 1;
-                            final int timeValveSpendsOpen =
-                                    timeRemaining - (timeToOpenOneValve + allShortestPaths.get(to).get(valve).distance);
-                            final int pressureReleased = timeValveSpendsOpen * (valve.on ? 0 : valve.pressure);
+                            int distance = allShortestPaths.get(from).get(valve);
+                            final int timeRemainingAfterOpeningThisValve =
+                                    timeRemaining - (timeToOpenOneValve + distance);
+                            assert !valve.on;
+                            final int pressureReleased =
+                                    timeRemainingAfterOpeningThisValve * valve.pressure;
                             valve.turn();
-                            Best rest = findBestScore(valve, new HashSet<>(visitWorthyValves()), allShortestPaths, timeValveSpendsOpen);
+                            Best rest = findBestScore(
+                                    valve,
+                                    new HashSet<>(visitWorthyValves()),
+                                    allShortestPaths,
+                                    timeRemainingAfterOpeningThisValve);
                             valve.turn();
                             score = pressureReleased + rest.score;
                         }
@@ -261,39 +222,47 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 return new Best(bestValve, best);
             }
 
-            private Map<Valve, ShortestPath> findShortestPaths(
+            private Map<Valve, Integer> findShortestPaths(
                     Set<Valve> valves,
-                    Map<String, Set<Connection>> adjacent,
+                    Map<Valve, Set<Connection>> adjacent,
                     Valve start) {
-                Map<Valve, ShortestPath> pathsSoFar = new HashMap<>();
-                pathsSoFar.put(start, new ShortestPath(0, List.of(start)));
+                final Map<Valve, Integer> distances = new HashMap<>();
+                final Map<Valve, Valve> previous = new HashMap<>();
 
-                Valve current = start;
-                while (current != null) {
-                    valves.remove(current);
-                    ShortestPath path = pathsSoFar.get(current);
-                    Set<Connection> adjacentToThis = adjacent.get(current.name);
-                    for (Connection connection : adjacentToThis) {
-                        Valve toValve = this.valves.get(connection.to);
-                        if (valves.contains(toValve)) {
-                            pathsSoFar.put(toValve, path.add(connection.cost, toValve));
+                valves.forEach(v -> distances.put(v, Integer.MAX_VALUE));
+
+                distances.put(start, 0);
+
+                while (!valves.isEmpty()) {
+                    Valve v = nearest(distances, valves);
+                    int soFar = distances.get(v);
+                    valves.remove(v);
+
+                    Set<Connection> conns = adjacent.get(v);
+                    for (Connection conn : conns) {
+                        Valve u = conn.to;
+                        if (valves.contains(u)) {
+                            int alt = soFar + conn.cost;
+                            if (alt < distances.get(u)) {
+                                distances.put(u, alt);
+                                previous.put(v, u);
+                            }
                         }
                     }
-                    current = findCheapest(valves, pathsSoFar);
                 }
 
-                return pathsSoFar;
+                return distances;
             }
 
-            private Valve findCheapest(Iterable<Valve> valves, Map<Valve, ShortestPath> distancesSoFar) {
-                int bestDistance = Integer.MAX_VALUE;
+            private Valve nearest(Map<Valve, Integer> distances, Set<Valve> valves) {
                 Valve best = null;
+                int near = Integer.MAX_VALUE;
                 for (Valve valve : valves) {
-                    if (distancesSoFar.containsKey(valve)) {
-                        int distance = distancesSoFar.get(valve).distance;
-                        if (distance < bestDistance) {
+                    Integer d = distances.get(valve);
+                    if (d != null) {
+                        if (d < near) {
                             best = valve;
-                            bestDistance = distance;
+                            near = d;
                         }
                     }
                 }
@@ -313,23 +282,26 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                             for (String name : connected) {
                                 Valve valve = valves.get(name);
                                 if (valve.pressure > 0) {
-                                    connect(parent, name, 1);
+                                    connect(parent, valve, List.of(), 1);
                                     queue.push(valve);
                                 } else {
-                                    queue.push(new Pending(parent, valve, 1));
+                                    queue.push(new Pending(parent, List.of(valve), 1));
                                 }
                             }
                         }
                     } else if (v instanceof Pending p) {
-                        if (visited.add(p.lastSeen)) {
-                            List<String> connected = adjacent.get(p.lastSeen.name);
+                        Valve tail = tail(p.seen);
+                        if (visited.add(tail)) {
+                            List<String> connected = adjacent.get(tail.name);
                             for (String name : connected) {
                                 Valve valve = valves.get(name);
                                 if (valve.pressure > 0) {
-                                    connect(p.upstream, name, p.distance + 1);
+                                    connect(p.upstream, valve, p.seen, p.distance + 1);
                                     queue.push(valve);
                                 } else {
-                                    queue.push(new Pending(p.upstream, valve, p.distance + 1));
+                                    List<Valve> nodes = new ArrayList<>(p.seen);
+                                    nodes.add(valve);
+                                    queue.push(new Pending(p.upstream, nodes, p.distance + 1));
                                 }
                             }
                         }
@@ -337,16 +309,23 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 }
             }
 
-            private void connect(Valve parent, String name, int cost) {
-                if (parent.name.equals(name)) {
+            private <T> T tail(List<T> things) {
+                assert things.size() > 0;
+                return things.get(things.size() - 1);
+            }
+
+            private void connect(Valve parent, Valve name, List<Valve> seen, int cost) {
+                if (parent.equals(name)) {
                     return;
                 }
 
-                connections.putIfAbsent(parent.name, new HashSet<>());
-                connections.get(parent.name).add(new Connection(cost, name));
+                assert seen.size() + 1 == cost;
+
+                connections.putIfAbsent(parent, new HashSet<>());
+                connections.get(parent).add(new Connection(cost, name));
 
                 connections.putIfAbsent(name, new HashSet<>());
-                connections.get(name).add(new Connection(cost, parent.name));
+                connections.get(name).add(new Connection(cost, parent));
             }
 
             int pressure = 0;
