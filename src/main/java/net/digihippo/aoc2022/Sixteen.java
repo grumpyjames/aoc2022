@@ -114,13 +114,10 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         return new Solution<>() {
             private final Map<String, Valve> valves = new HashMap<>();
             private final Map<String, List<String>> adjacent = new HashMap<>();
-            private final Map<Valve, Set<Connection>> connections = new HashMap<>();
 
             @Override
             public Integer result() {
                 // first off, let's simplify the graph, getting rid of the 0 flow nodes.
-                simplifyGraph();
-
                 final Map<Valve, Map<Valve, Integer>> allShortestPaths = new HashMap<>();
                 final Map<Valve, Set<Connection>> altConns = connecto(valves, adjacent);
                 for (Valve valve : valves.values()) {
@@ -181,8 +178,8 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 return result;
             }
 
-            private ArrayList<Valve> visitWorthyValves() {
-                return new ArrayList<>(connections.keySet().stream().filter(Valve::worthTurning).toList());
+            private List<Valve> visitWorthyValves() {
+                return valves.values().stream().filter(Valve::worthTurning).toList();
             }
 
             private Best findBestScore(
@@ -268,64 +265,6 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 }
 
                 return best;
-            }
-
-            private void simplifyGraph() {
-                final Deque<WorkItem> queue = new ArrayDeque<>();
-                final Set<Valve> visited = new HashSet<>();
-                queue.add(valves.get("AA"));
-                while (!queue.isEmpty()) {
-                    WorkItem v = queue.poll();
-                    if (v instanceof Valve parent) {
-                        if (visited.add(parent)) {
-                            List<String> connected = adjacent.get(parent.name);
-                            for (String name : connected) {
-                                Valve valve = valves.get(name);
-                                if (valve.pressure > 0) {
-                                    connect(parent, valve, List.of(), 1);
-                                    queue.push(valve);
-                                } else {
-                                    queue.push(new Pending(parent, List.of(valve), 1));
-                                }
-                            }
-                        }
-                    } else if (v instanceof Pending p) {
-                        Valve tail = tail(p.seen);
-                        if (visited.add(tail)) {
-                            List<String> connected = adjacent.get(tail.name);
-                            for (String name : connected) {
-                                Valve valve = valves.get(name);
-                                if (valve.pressure > 0) {
-                                    connect(p.upstream, valve, p.seen, p.distance + 1);
-                                    queue.push(valve);
-                                } else {
-                                    List<Valve> nodes = new ArrayList<>(p.seen);
-                                    nodes.add(valve);
-                                    queue.push(new Pending(p.upstream, nodes, p.distance + 1));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            private <T> T tail(List<T> things) {
-                assert things.size() > 0;
-                return things.get(things.size() - 1);
-            }
-
-            private void connect(Valve parent, Valve name, List<Valve> seen, int cost) {
-                if (parent.equals(name)) {
-                    return;
-                }
-
-                assert seen.size() + 1 == cost;
-
-                connections.putIfAbsent(parent, new HashSet<>());
-                connections.get(parent).add(new Connection(cost, name));
-
-                connections.putIfAbsent(name, new HashSet<>());
-                connections.get(name).add(new Connection(cost, parent));
             }
 
             int pressure = 0;

@@ -14,6 +14,6 @@ class SixteenTest extends TestTemplate<Integer, Integer> {
             Valve JJ has flow rate=21; tunnel leads to valve II""";
 
     public SixteenTest() {
-        super(new Sixteen(), EXAMPLE_INPUT, 1651, 1652, "sixteen.txt");
+        super(new Sixteen(), EXAMPLE_INPUT, 1651, 1707, "sixteen.txt");
     }
 }
