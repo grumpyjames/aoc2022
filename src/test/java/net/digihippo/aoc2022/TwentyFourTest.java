@@ -10,6 +10,6 @@ class TwentyFourTest extends TestTemplate<Integer, Integer> {
             ######.#""";
 
     public TwentyFourTest() {
-        super(new TwentyFour(), EXAMPLE_INPUT, 18, 19, "twentyfour.txt");
+        super(new TwentyFour(), EXAMPLE_INPUT, 18, 54, "twentyfour.txt");
     }
 }
