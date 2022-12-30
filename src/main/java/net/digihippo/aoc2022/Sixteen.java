@@ -1,5 +1,6 @@
 package net.digihippo.aoc2022;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -9,10 +10,12 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         private final String name;
         private final int pressure;
         private boolean on = false;
+        private final int hashcode;
 
         private Valve(String name, int pressure) {
             this.name = name;
             this.pressure = pressure;
+            this.hashcode = Objects.hash(name);
         }
 
         @Override
@@ -25,7 +28,7 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
         @Override
         public int hashCode() {
-            return Objects.hash(name);
+            return hashcode;
         }
 
         @Override
@@ -173,7 +176,12 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 int time = 0;
                 Valve currentValve = valves.get("AA");
 
-                ConsList<Valve> bestRoute = findBestScore(currentValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 30 - time);
+                ConsList<Valve> bestRoute = findBestScore(
+                        currentValve,
+                        new HashSet<>(visitWorthyValves()),
+                        new HashSet<>(),
+                        allShortestPaths,
+                        30 - time);
                 List<Valve> path = bestRoute.toList();
                 Iterator<Valve> iterator = path.iterator();
                 while (time < 30) {
@@ -202,9 +210,11 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 Valve myCurrentValve = valves.get("AA");
                 Valve eleCurrentValve = valves.get("AA");
                 CoOp coOp = findCoOpScore(
+                        true,
                         myCurrentValve,
                         eleCurrentValve,
                         new HashSet<>(visitWorthyValves()),
+                        new HashSet<>(),
                         allShortestPaths,
                         26,
                         26);
@@ -332,9 +342,11 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         abstract void doYourThing(Map<Valve, Map<Valve, Integer>> allShortestPaths);
 
         protected CoOp findCoOpScore(
+                boolean top,
                 Valve myFrom,
                 Valve eleFrom,
                 Set<Valve> all,
+                Set<Valve> visited,
                 Map<Valve, Map<Valve, Integer>> allShortestPaths,
                 int myTimeRemaining,
                 int elephantTimeRemaining
@@ -344,11 +356,11 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
             }
 
             if (myTimeRemaining <= 0) {
-                return new CoOp(new EmptyC<>(), findBestScore(eleFrom, all, allShortestPaths, elephantTimeRemaining));
+                return new CoOp(new EmptyC<>(), findBestScore(eleFrom, all, visited, allShortestPaths, elephantTimeRemaining));
             }
 
             if (elephantTimeRemaining <= 0) {
-                return new CoOp(findBestScore(myFrom, all, allShortestPaths, myTimeRemaining), new EmptyC<>());
+                return new CoOp(findBestScore(myFrom, all, visited, allShortestPaths, myTimeRemaining), new EmptyC<>());
             }
 
             int best = 0;
@@ -360,33 +372,43 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
             int timeToOpenOneValve = 1;
             for (Valve myValve : all) {
+                if (visited.contains(myValve)) {
+                    continue;
+                }
+
+                if (top) System.out.println(Instant.now() + ": Examining valve " + myValve);
+
                 assert !myValve.equals(myFrom);
-                assert !myValve.on;
                 final int distanceToMyValve = allShortestPaths.get(myFrom).get(myValve);
                 final int myTimeRemainingAfterOpeningValve =
                         myTimeRemaining - (timeToOpenOneValve + distanceToMyValve);
                 final int pressureReleasedByMe =
                         myTimeRemainingAfterOpeningValve * myValve.pressure;
 
-                myValve.turn();
-                for (Valve eleValve : visitWorthyValves()) {
+                visited.add(myValve);
+
+                for (Valve eleValve: all) {
+                    if (visited.contains(eleValve)) {
+                        continue;
+                    }
                     assert !eleValve.equals(eleFrom);
-                    assert !eleValve.on;
                     final int distanceToEleValve = allShortestPaths.get(eleFrom).get(eleValve);
                     final int eleTimeRemainingAfterOpeningValve =
                             elephantTimeRemaining - (timeToOpenOneValve + distanceToEleValve);
                     final int pressureReleasedByEle =
                             eleTimeRemainingAfterOpeningValve * eleValve.pressure;
-                    eleValve.turn();
+                    visited.add(eleValve);
 
                     CoOp combo = findCoOpScore(
+                            false,
                             myValve,
                             eleValve,
-                            new HashSet<>(visitWorthyValves()),
+                            all,
+                            visited,
                             allShortestPaths,
                             myTimeRemainingAfterOpeningValve,
                             eleTimeRemainingAfterOpeningValve
-                            );
+                    );
                     int scoreThisCoop = pressureReleasedByMe + pressureReleasedByEle + combo.score();
                     if (scoreThisCoop > best) {
                         myScore = pressureReleasedByMe + combo.me.score();
@@ -397,9 +419,10 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                         eleBest = eleValve;
                     }
 
-                    eleValve.turn();
+                    visited.remove(eleValve);
                 }
-                myValve.turn();
+
+                visited.remove(myValve);
             }
 
             if (myBest == null) {
@@ -412,6 +435,7 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         protected ConsList<Valve> findBestScore(
                 Valve from,
                 Set<Valve> all,
+                Set<Valve> visited,
                 Map<Valve, Map<Valve, Integer>> allShortestPaths,
                 int timeRemaining) {
             if (timeRemaining <= 0) {
@@ -422,21 +446,26 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
             Valve bestValve = null;
             ConsList<Valve> bestest = new EmptyC<>();
             for (Valve valve : all) {
+                if (visited.contains(valve)) {
+                    continue;
+                }
                 assert !valve.equals(from);
+
                 int timeToOpenOneValve = 1;
                 int distance = allShortestPaths.get(from).get(valve);
                 final int timeRemainingAfterOpeningThisValve =
                         timeRemaining - (timeToOpenOneValve + distance);
-                assert !valve.on;
                 final int pressureReleased =
                         timeRemainingAfterOpeningThisValve * valve.pressure;
-                valve.turn();
+                visited.add(valve);
                 ConsList<Valve> rest = findBestScore(
                         valve,
-                        new HashSet<>(visitWorthyValves()),
+                        all,
+                        visited,
                         allShortestPaths,
                         timeRemainingAfterOpeningThisValve);
-                valve.turn();
+                visited.remove(valve);
+
                 int score = pressureReleased + rest.score();
 
                 if (score > best) {
