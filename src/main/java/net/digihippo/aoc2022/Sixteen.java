@@ -113,8 +113,6 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
     sealed interface ConsList<T> permits Head, EmptyC {
         int score();
 
-        T next();
-
         List<T> toList();
     }
 
@@ -125,10 +123,6 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
     }
 
     record Head<T>(T t, int score, ConsList<T> rest) implements ConsList<T> {
-        @Override
-        public T next() {
-            return t;
-        }
 
         @Override
         public List<T> toList() {
@@ -151,11 +145,6 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         @Override
         public int score() {
             return 0;
-        }
-
-        @Override
-        public T next() {
-            return null;
         }
 
         @Override
