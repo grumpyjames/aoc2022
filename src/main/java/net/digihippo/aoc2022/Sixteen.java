@@ -109,6 +109,29 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
     record Best(Valve v, int score) {}
 
+    sealed interface ConsList<T> permits Head, EmptyC {
+        int score();
+
+        T next();
+    }
+    record Head<T>(T t, int score, ConsList<T> rest) implements ConsList<T> {
+        @Override
+        public T next() {
+            return t;
+        }
+    }
+    record EmptyC<T>() implements ConsList<T> {
+        @Override
+        public int score() {
+            return 0;
+        }
+
+        @Override
+        public T next() {
+            return null;
+        }
+    }
+
     @Override
     Solution<Integer> partOne() {
         return new Elephant() {
@@ -117,8 +140,8 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 Valve currentValve = valves.get("AA");
 
                 while (time < 30) {
-                    Best bestScore = findBestScore(currentValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 30 - time);
-                    Valve valve = bestScore.v;
+                    ConsList<Valve> bestScore = findBestScore(currentValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 30 - time);
+                    Valve valve = bestScore.next();
                     if (valve != null) {
                         int distance = allShortestPaths.get(currentValve).get(valve);
                         time = moveTo(time, distance, valve);
@@ -144,14 +167,14 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 Valve eleValve = valves.get("AA");
 
                 while (time < 26) {
-                    Best myScore = findBestScore(myValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 26 - time);
+                    ConsList<Valve> myScore = findBestScore(myValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 26 - time);
 
-                    myScore.v.turn();
-                    Best eleScore = findBestScore(eleValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 26 - time);
-                    myScore.v.turn();
+                    myScore.next().turn();
+                    ConsList<Valve> eleScore = findBestScore(eleValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 26 - time);
+                    myScore.next().turn();
 
-                    Valve myNextValve = myScore.v;
-                    Valve eleNextValve = eleScore.v;
+                    Valve myNextValve = myScore.next();
+                    Valve eleNextValve = eleScore.next();
 
                     Integer myNextDistance = allShortestPaths.get(myValve).get(myNextValve);
                     Integer eleNextDistance = allShortestPaths.get(eleValve).get(eleNextValve);
@@ -208,41 +231,45 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
         abstract void doYourThing(Map<Valve, Map<Valve, Integer>> allShortestPaths);
 
-        protected Best findBestScore(
+        protected ConsList<Valve> findBestScore(
                 Valve from,
                 Set<Valve> all,
                 Map<Valve, Map<Valve, Integer>> allShortestPaths,
                 int timeRemaining) {
+            if (timeRemaining <= 0) {
+                return new EmptyC<>();
+            }
+
             int best = 0;
             Valve bestValve = null;
+            ConsList<Valve> bestest = new EmptyC<>();
             for (Valve valve : all) {
                 if (!valve.equals(from)) {
-                    int score = 0;
-                    if (timeRemaining > 0) {
-                        int timeToOpenOneValve = 1;
-                        int distance = allShortestPaths.get(from).get(valve);
-                        final int timeRemainingAfterOpeningThisValve =
-                                timeRemaining - (timeToOpenOneValve + distance);
-                        assert !valve.on;
-                        final int pressureReleased =
-                                timeRemainingAfterOpeningThisValve * valve.pressure;
-                        valve.turn();
-                        Best rest = findBestScore(
-                                valve,
-                                new HashSet<>(visitWorthyValves()),
-                                allShortestPaths,
-                                timeRemainingAfterOpeningThisValve);
-                        valve.turn();
-                        score = pressureReleased + rest.score;
-                    }
+                    int timeToOpenOneValve = 1;
+                    int distance = allShortestPaths.get(from).get(valve);
+                    final int timeRemainingAfterOpeningThisValve =
+                            timeRemaining - (timeToOpenOneValve + distance);
+                    assert !valve.on;
+                    final int pressureReleased =
+                            timeRemainingAfterOpeningThisValve * valve.pressure;
+                    valve.turn();
+                    ConsList<Valve> rest = findBestScore(
+                            valve,
+                            new HashSet<>(visitWorthyValves()),
+                            allShortestPaths,
+                            timeRemainingAfterOpeningThisValve);
+                    valve.turn();
+                    int score = pressureReleased + rest.score();
 
                     if (score > best) {
                         best = score;
                         bestValve = valve;
+                        bestest = rest;
                     }
                 }
             }
-            return new Best(bestValve, best);
+
+            return new Head<>(bestValve, best, bestest);
         }
 
         private Map<Valve, Set<Connection>> connecto(
