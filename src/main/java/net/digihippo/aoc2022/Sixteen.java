@@ -114,6 +114,13 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
         List<T> toList();
     }
+
+    record CoOp(ConsList<Valve> me, ConsList<Valve> elephant) {
+        public int score() {
+            return me.score() + elephant().score();
+        }
+    }
+
     record Head<T>(T t, int score, ConsList<T> rest) implements ConsList<T> {
         @Override
         public T next() {
@@ -173,9 +180,9 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                     if (iterator.hasNext()) {
                         Valve valve = iterator.next();
                         int distance = allShortestPaths.get(currentValve).get(valve);
-                        time = moveTo(time, distance, valve);
-                        time = turnValveOn(time, valve);
-                        valve.turn();
+                        time = move(time, distance);
+                        System.out.println("\tMoving to " + valve);
+                        time = turnValvesOn(time, valve);
                         currentValve = valve;
                     } else {
                         time = tick(time);
@@ -192,35 +199,99 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
             @Override
             void doYourThing(Map<Valve, Map<Valve, Integer>> allShortestPaths) {
                 int time = 0;
-                Valve myValve = valves.get("AA");
-                Valve eleValve = valves.get("AA");
+                Valve myCurrentValve = valves.get("AA");
+                Valve eleCurrentValve = valves.get("AA");
+                CoOp coOp = findCoOpScore(
+                        myCurrentValve,
+                        eleCurrentValve,
+                        new HashSet<>(visitWorthyValves()),
+                        allShortestPaths,
+                        26,
+                        26);
+
+                Deque<Valve> eleValves = new ArrayDeque<>(coOp.elephant.toList());
+                Deque<Valve> myValves = new ArrayDeque<>(coOp.me.toList());
+
+                Valve eleNextValve = eleValves.poll();
+                Valve myNextValve = myValves.poll();
+                int myDistance = allShortestPaths.get(myCurrentValve).get(myNextValve);
+                int eleDistance = allShortestPaths.get(eleCurrentValve).get(eleNextValve);
 
                 while (time < 26) {
-                    ConsList<Valve> myScore = findBestScore(myValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 26 - time);
+                    assert eleDistance >= 0;
+                    assert myDistance >= 0;
+                    if (myNextValve == null && eleNextValve == null) {
+                        time = tick(time);
+                    } else if (myNextValve == null) {
+                        time = turnValvesOn(time, eleNextValve);
+                        eleCurrentValve = eleNextValve;
+                        eleNextValve = eleValves.poll();
+                        if (eleNextValve != null) {
+                            eleDistance = allShortestPaths.get(eleCurrentValve).get(eleNextValve);
+                        } else {
+                            eleDistance = 0;
+                        }
+                    } else if (eleNextValve == null) {
+                        time = move(time, myDistance);
+                        time = turnValvesOn(time, myNextValve);
+                        myCurrentValve = myNextValve;
+                        myNextValve = myValves.poll();
+                        if (myNextValve != null) {
+                            myDistance = allShortestPaths.get(myCurrentValve).get(myNextValve);
+                        } else {
+                            myDistance = 0;
+                        }
+                    } else if (myDistance == eleDistance) {
+                        time = move(time, myDistance);
+                        System.out.println("\tI move to " + myNextValve + ", elephant moves to " + eleNextValve);
+                        time = turnValvesOn(time, myNextValve, eleNextValve);
 
-                    myScore.next().turn();
-                    ConsList<Valve> eleScore = findBestScore(eleValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 26 - time);
-                    myScore.next().turn();
+                        myCurrentValve = myNextValve;
+                        myNextValve = myValves.poll();
+                        if (myNextValve != null) {
+                            myDistance = allShortestPaths.get(myCurrentValve).get(myNextValve);
+                        } else {
+                            myDistance = 0;
+                        }
 
-                    Valve myNextValve = myScore.next();
-                    Valve eleNextValve = eleScore.next();
+                        eleCurrentValve = eleNextValve;
+                        eleNextValve = eleValves.poll();
+                        if (eleNextValve != null) {
+                            eleDistance = allShortestPaths.get(eleCurrentValve).get(eleNextValve);
+                        } else {
+                            eleDistance = 0;
+                        }
+                    } else if (eleDistance < myDistance) {
+                        time = move(time, eleDistance);
+                        System.out.println("\tElephant moves to " + eleNextValve);
 
-                    Integer myNextDistance = allShortestPaths.get(myValve).get(myNextValve);
-                    Integer eleNextDistance = allShortestPaths.get(eleValve).get(eleNextValve);
+                        myDistance -= eleDistance;
+                        time = turnValvesOn(time, eleNextValve);
+                        myDistance--; // valve turning on time
 
-                    if (myNextDistance <= eleNextDistance) {
-                        time = moveTo(time, myNextDistance, myNextValve);
+                        eleCurrentValve = eleNextValve;
+                        eleNextValve = eleValves.poll();
+                        if (eleNextValve != null) {
+                            eleDistance = allShortestPaths.get(eleCurrentValve).get(eleNextValve);
+                        } else {
+                            eleDistance = 0;
+                        }
+                    } else {
+                        // myDistance < eleDistance
+                        time = move(time, myDistance);
+                        System.out.println("\tI move to " + myNextValve);
+                        eleDistance -= myDistance;
+                        time = turnValvesOn(time, myNextValve);
+                        eleDistance--; // valve turning on time
+
+                        myCurrentValve = myNextValve;
+                        myNextValve = myValves.poll();
+                        if (myNextValve != null) {
+                            myDistance = allShortestPaths.get(myCurrentValve).get(myNextValve);
+                        } else {
+                            myDistance = 0;
+                        }
                     }
-
-//                    if (valve != null) {
-//                        int distance = allShortestPaths.get(myValve).get(valve);
-//                        time = moveTo(time, distance, valve);
-//                        time = turnValveOn(time, valve);
-//                        valve.turn();
-//                        myValve = valve;
-//                    } else {
-//                        time = tick(time);
-//                    }
                 }
             }
         };
@@ -260,6 +331,84 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
         abstract void doYourThing(Map<Valve, Map<Valve, Integer>> allShortestPaths);
 
+        protected CoOp findCoOpScore(
+                Valve myFrom,
+                Valve eleFrom,
+                Set<Valve> all,
+                Map<Valve, Map<Valve, Integer>> allShortestPaths,
+                int myTimeRemaining,
+                int elephantTimeRemaining
+        ) {
+            if (myTimeRemaining <= 0 && elephantTimeRemaining <= 0) {
+                return new CoOp(new EmptyC<>(), new EmptyC<>());
+            }
+
+            if (myTimeRemaining <= 0) {
+                return new CoOp(new EmptyC<>(), findBestScore(eleFrom, all, allShortestPaths, elephantTimeRemaining));
+            }
+
+            if (elephantTimeRemaining <= 0) {
+                return new CoOp(findBestScore(myFrom, all, allShortestPaths, myTimeRemaining), new EmptyC<>());
+            }
+
+            int best = 0;
+            int myScore = 0;
+            Valve myBest = null;
+            int eleScore = 0;
+            Valve eleBest = null;
+            CoOp bestest = null;
+
+            int timeToOpenOneValve = 1;
+            for (Valve myValve : all) {
+                assert !myValve.equals(myFrom);
+                assert !myValve.on;
+                final int distanceToMyValve = allShortestPaths.get(myFrom).get(myValve);
+                final int myTimeRemainingAfterOpeningValve =
+                        myTimeRemaining - (timeToOpenOneValve + distanceToMyValve);
+                final int pressureReleasedByMe =
+                        myTimeRemainingAfterOpeningValve * myValve.pressure;
+
+                myValve.turn();
+                for (Valve eleValve : visitWorthyValves()) {
+                    assert !eleValve.equals(eleFrom);
+                    assert !eleValve.on;
+                    final int distanceToEleValve = allShortestPaths.get(eleFrom).get(eleValve);
+                    final int eleTimeRemainingAfterOpeningValve =
+                            elephantTimeRemaining - (timeToOpenOneValve + distanceToEleValve);
+                    final int pressureReleasedByEle =
+                            eleTimeRemainingAfterOpeningValve * eleValve.pressure;
+                    eleValve.turn();
+
+                    CoOp combo = findCoOpScore(
+                            myValve,
+                            eleValve,
+                            new HashSet<>(visitWorthyValves()),
+                            allShortestPaths,
+                            myTimeRemainingAfterOpeningValve,
+                            eleTimeRemainingAfterOpeningValve
+                            );
+                    int scoreThisCoop = pressureReleasedByMe + pressureReleasedByEle + combo.score();
+                    if (scoreThisCoop > best) {
+                        myScore = pressureReleasedByMe + combo.me.score();
+                        eleScore = pressureReleasedByEle + combo.elephant.score();
+                        best = scoreThisCoop;
+                        bestest = combo;
+                        myBest = myValve;
+                        eleBest = eleValve;
+                    }
+
+                    eleValve.turn();
+                }
+                myValve.turn();
+            }
+
+            if (myBest == null) {
+                return new CoOp(new EmptyC<>(), new EmptyC<>());
+            }
+
+            return new CoOp(new Head<>(myBest, myScore, bestest.me), new Head<>(eleBest, eleScore, bestest.elephant));
+        }
+
         protected ConsList<Valve> findBestScore(
                 Valve from,
                 Set<Valve> all,
@@ -273,28 +422,27 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
             Valve bestValve = null;
             ConsList<Valve> bestest = new EmptyC<>();
             for (Valve valve : all) {
-                if (!valve.equals(from)) {
-                    int timeToOpenOneValve = 1;
-                    int distance = allShortestPaths.get(from).get(valve);
-                    final int timeRemainingAfterOpeningThisValve =
-                            timeRemaining - (timeToOpenOneValve + distance);
-                    assert !valve.on;
-                    final int pressureReleased =
-                            timeRemainingAfterOpeningThisValve * valve.pressure;
-                    valve.turn();
-                    ConsList<Valve> rest = findBestScore(
-                            valve,
-                            new HashSet<>(visitWorthyValves()),
-                            allShortestPaths,
-                            timeRemainingAfterOpeningThisValve);
-                    valve.turn();
-                    int score = pressureReleased + rest.score();
+                assert !valve.equals(from);
+                int timeToOpenOneValve = 1;
+                int distance = allShortestPaths.get(from).get(valve);
+                final int timeRemainingAfterOpeningThisValve =
+                        timeRemaining - (timeToOpenOneValve + distance);
+                assert !valve.on;
+                final int pressureReleased =
+                        timeRemainingAfterOpeningThisValve * valve.pressure;
+                valve.turn();
+                ConsList<Valve> rest = findBestScore(
+                        valve,
+                        new HashSet<>(visitWorthyValves()),
+                        allShortestPaths,
+                        timeRemainingAfterOpeningThisValve);
+                valve.turn();
+                int score = pressureReleased + rest.score();
 
-                    if (score > best) {
-                        best = score;
-                        bestValve = valve;
-                        bestest = rest;
-                    }
+                if (score > best) {
+                    best = score;
+                    bestValve = valve;
+                    bestest = rest;
                 }
             }
 
@@ -379,10 +527,13 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
         int pressure = 0;
 
-        protected int turnValveOn(int time, Valve valve) {
+        protected int turnValvesOn(int time, Valve... valves) {
             System.out.println("== Minute " + (time + 1));
             releasePressure();
-            System.out.println("\tTurned on valve " + valve.name);
+            for (Valve valve : valves) {
+                System.out.println("\tTurned on valve " + valve.name);
+                valve.turn();
+            }
 
             return time + 1;
         }
@@ -395,14 +546,13 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
             System.out.println("\tTotal pressure is now " + pressure);
         }
 
-        protected int moveTo(int time, int distance, Valve destination) {
+        protected int move(int time, int distance) {
             int resultTime = time;
             for (int i = 0; i < distance; i++) {
                 System.out.println("== Minute " + (resultTime + 1));
                 releasePressure();
                 resultTime++;
             }
-            System.out.println("\tMoving to " + destination);
 
             return resultTime;
         }
