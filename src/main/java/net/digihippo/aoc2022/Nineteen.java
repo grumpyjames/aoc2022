@@ -193,6 +193,8 @@ public class Nineteen extends SolutionTemplate<Integer, Integer> {
 
                     boolean firstObsidian = true;
                     boolean firstGeode = true;
+                    int trimNoObsidian = 0;
+                    int trimNoGeode = 0;
 
                     for (int i = 0; i < 24; i++) {
                         final int timeLeft = 24 - i;
@@ -211,13 +213,21 @@ public class Nineteen extends SolutionTemplate<Integer, Integer> {
                                         Nineteen::concat
                                 ));
 
-                        if (firstObsidian && buildingSites.stream().anyMatch(BuildingSite::hasObsidianRobot)) {
-                            firstObsidian = false;
+                        if (trimNoObsidian > 0 && trimNoObsidian == i) {
+                            trimNoObsidian = 0;
                             buildingSites = buildingSites.stream().filter(BuildingSite::hasObsidianRobot).collect(Collectors.toList());
+                        }
+                        else if (trimNoGeode > 0 && trimNoGeode == i) {
+                            trimNoGeode = 0;
+                            buildingSites = buildingSites.stream().filter(BuildingSite::hasGeodeRobot).collect(Collectors.toList());
+                        }
+                        else if (firstObsidian && buildingSites.stream().anyMatch(BuildingSite::hasObsidianRobot)) {
+                            firstObsidian = false;
+                            trimNoObsidian = i + 2;
                         }
                         else if (firstGeode && buildingSites.stream().anyMatch(BuildingSite::hasGeodeRobot)) {
                             firstGeode = false;
-                            buildingSites = buildingSites.stream().filter(BuildingSite::hasGeodeRobot).collect(Collectors.toList());
+                            trimNoGeode = i + 2;
                         }
                         else {
                             buildingSites = refilter(hmm);
