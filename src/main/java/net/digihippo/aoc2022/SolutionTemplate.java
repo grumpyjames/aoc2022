@@ -23,14 +23,14 @@ public abstract class SolutionTemplate<T1, T2> {
         return puzzle(puzzleInput, partOne());
     }
 
-    T2 examplePartTwo(String example)
+    T2 examplePartTwo(String example, Solution<T2> sol)
     {
-        return example(example, partTwo());
+        return example(example, sol);
     }
 
-    T2 puzzlePartTwo(InputStream puzzleInput)
+    T2 puzzlePartTwo(InputStream puzzleInput, Solution<T2> solution)
     {
-        return puzzle(puzzleInput, partTwo());
+        return puzzle(puzzleInput, solution);
     }
 
     private static <X> X example(String input, Solution<X> s) {

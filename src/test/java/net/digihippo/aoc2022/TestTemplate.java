@@ -38,11 +38,19 @@ public abstract class TestTemplate<T1, T2> {
 
     @Test
     void exampleTwo() {
-        assertEquals(exampleTwoAnswer, solution.examplePartTwo(exampleInput));
+        SolutionTemplate.Solution<T2> sol = solution.partTwo();
+        visitExampleTwo(sol);
+        assertEquals(exampleTwoAnswer, solution.examplePartTwo(exampleInput, sol));
     }
 
     @Test
     void realTwo() {
-        System.out.println(solution.puzzlePartTwo(Inputs.puzzleInput(puzzleFileName)));
+        SolutionTemplate.Solution<T2> sol = solution.partTwo();
+        visitRealTwo(sol);
+        System.out.println(solution.puzzlePartTwo(Inputs.puzzleInput(puzzleFileName), sol));
     }
+
+    void visitExampleTwo(SolutionTemplate.Solution<T2> solution) {}
+
+    void visitRealTwo(SolutionTemplate.Solution<T2> solution) {}
 }

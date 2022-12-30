@@ -30,6 +30,6 @@ class NineTest extends TestTemplate<Integer, Integer> {
                 R 17
                 D 10
                 L 25
-                U 20"""));
+                U 20""", solution.partTwo()));
     }
 }
