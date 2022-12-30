@@ -40,6 +40,7 @@ public class TwentyTwo extends SolutionTemplate<Integer, Integer> {
                 for (Edge edge : edges) {
                     Position pos = edge.apply(this, newX, newY);
                     if (pos != null) {
+                        System.out.println("Used an edge to move between " + this + " and " + pos);
                         return pos;
                     }
                 }
