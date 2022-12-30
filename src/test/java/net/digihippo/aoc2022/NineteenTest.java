@@ -2,10 +2,9 @@ package net.digihippo.aoc2022;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static net.digihippo.aoc2022.Nineteen.ResourceType.Clay;
 import static net.digihippo.aoc2022.Nineteen.ResourceType.Ore;
@@ -25,7 +24,7 @@ class NineteenTest extends TestTemplate<Integer, Integer> {
         Nineteen.Blueprint bp = Nineteen.parse("Blueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 8 clay. Each geode robot costs 3 ore and 12 obsidian.");
         Nineteen.BuildingSite buildingSite = Nineteen.newBuildingSite(bp);
 
-        List<Nineteen.BuildingSite> buildingSites = buildingSite.tickOptions(20).stream().map(Supplier::get).collect(Collectors.toList());
+        List<Nineteen.BuildingSite> buildingSites = new ArrayList<>(buildingSite.tickOptions(20));
         assertEquals(List.of(buildingSite), buildingSites);
     }
 
@@ -49,7 +48,7 @@ class NineteenTest extends TestTemplate<Integer, Integer> {
         buildingSite.accrueResources();
         buildingSite.accrueResources();
 
-        List<Nineteen.BuildingSite> buildingSites = buildingSite.tickOptions(20).stream().map(Supplier::get).collect(Collectors.toList());
+        List<Nineteen.BuildingSite> buildingSites = new ArrayList<>(buildingSite.tickOptions(20));
 
         assertEquals(
                 List.of(buildingSite.withAdditionalRobot(Ore), buildingSite.skippingRobotType(Ore)),
@@ -70,6 +69,6 @@ class NineteenTest extends TestTemplate<Integer, Integer> {
 
         assertEquals(
                 List.of(oreSkipped.withAdditionalRobot(Clay)),
-                oreSkipped.tickOptions(20).stream().map(Supplier::get).toList());
+                oreSkipped.tickOptions(20).stream().toList());
     }
 }

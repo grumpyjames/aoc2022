@@ -1,10 +1,9 @@
 package net.digihippo.aoc2022;
 
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class Nineteen extends SolutionTemplate<Integer, Integer> {
     public enum ResourceType {
@@ -73,24 +72,25 @@ public class Nineteen extends SolutionTemplate<Integer, Integer> {
             return possible;
         }
 
-        List<Supplier<BuildingSite>> tickOptions(int timeLeft) {
+        List<BuildingSite> tickOptions(int timeLeft) {
             EnumSet<ResourceType> availableBuilds = buildOptions(timeLeft);
             // want: an option to build each available type right now
             //   or: an option to not build that type, but prevent that type being built next
-            final List<Supplier<BuildingSite>> sites = new ArrayList<>();
+            final List<BuildingSite> sites = new ArrayList<>();
+            accrueResources();
 
             for (ResourceType availableBuild : availableBuilds) {
-                sites.add(() -> this.withAdditionalRobot(availableBuild));
+                sites.add(this.withAdditionalRobot(availableBuild));
 
                 EnumSet<ResourceType> newCannotBuy = EnumSet.copyOf(cannotBuy);
                 newCannotBuy.add(availableBuild);
                 if (newCannotBuy.size() <= robots.keySet().size()) {
-                    sites.add(() -> this.skippingRobotType(availableBuild));
+                    sites.add(this.skippingRobotType(availableBuild));
                 }
             }
 
             if (sites.isEmpty()) {
-                return List.of(() -> this);
+                return List.of(this);
             } else {
                 return sites;
             }
@@ -180,82 +180,52 @@ public class Nineteen extends SolutionTemplate<Integer, Integer> {
 
     @Override
     Solution<Integer> partOne() {
-        return new Solution<>() {
-            private final List<Blueprint> blueprints = new ArrayList<>();
+        return new RobotPlanOptimiser(24) {
+            int result = 0;
 
             @Override
-            public Integer result() {
-                int result = 0;
+            protected Iterable<Blueprint> filtered(List<Blueprint> blueprints) {
+                return blueprints;
+            }
 
-                for (Blueprint blueprint : blueprints) {
-                    BuildingSite site = newBuildingSite(blueprint);
-                    List<BuildingSite> buildingSites = List.of(site);
-
-                    boolean firstObsidian = true;
-                    boolean firstGeode = true;
-                    int trimNoObsidian = 0;
-                    int trimNoGeode = 0;
-
-                    for (int i = 0; i < 24; i++) {
-                        final int timeLeft = 24 - i;
-                        List<Supplier<BuildingSite>> bse = buildingSites
-                                .stream()
-                                .flatMap(bs -> bs.tickOptions(timeLeft).stream())
-                                .toList();
-                        buildingSites.forEach(BuildingSite::accrueResources);
-                        buildingSites = bse.stream().map(Supplier::get).collect(Collectors.toList());
-
-                        Map<EnumMap<ResourceType, Integer>, List<BuildingSite>> hmm = buildingSites
-                                .stream()
-                                .collect(Collectors.toMap(
-                                        b -> b.resources,
-                                        List::of,
-                                        Nineteen::concat
-                                ));
-
-                        if (trimNoObsidian > 0 && trimNoObsidian == i) {
-                            trimNoObsidian = 0;
-                            buildingSites = buildingSites.stream().filter(BuildingSite::hasObsidianRobot).collect(Collectors.toList());
-                        }
-                        else if (trimNoGeode > 0 && trimNoGeode == i) {
-                            trimNoGeode = 0;
-                            buildingSites = buildingSites.stream().filter(BuildingSite::hasGeodeRobot).collect(Collectors.toList());
-                        }
-                        else if (firstObsidian && buildingSites.stream().anyMatch(BuildingSite::hasObsidianRobot)) {
-                            firstObsidian = false;
-                            trimNoObsidian = i + 2;
-                        }
-                        else if (firstGeode && buildingSites.stream().anyMatch(BuildingSite::hasGeodeRobot)) {
-                            firstGeode = false;
-                            trimNoGeode = i + 2;
-                        }
-                        else {
-                            buildingSites = refilter(hmm);
-                        }
-                    }
-
-                    int geodude = buildingSites
-                            .stream()
-                            .mapToInt(bs -> bs.resources.getOrDefault(ResourceType.Geode, 0))
-                            .max()
-                            .getAsInt();
-                    System.out.println("Blueprint " + blueprint.number + ": " + geodude);
-                    result += (blueprint.number * geodude);
-                }
-
+            @Override
+            protected int resultPlease() {
                 return result;
             }
 
             @Override
-            public void accept(String s) {
-                blueprints.add(parse(s));
+            void onResult(Blueprint blueprint, int geodes) {
+                result += (blueprint.number * geodes);
             }
         };
     }
 
-    private List<BuildingSite> refilter(Map<EnumMap<ResourceType, Integer>, List<BuildingSite>> hmm) {
-        final List<BuildingSite> results = new ArrayList<>();
-        for (List<BuildingSite> value : hmm.values()) {
+    @Override
+    Solution<Integer> partTwo() {
+        return new RobotPlanOptimiser(32) {
+            int result = 1;
+            @Override
+            protected Iterable<Blueprint> filtered(List<Blueprint> blueprints) {
+                return blueprints.subList(0, 3);
+            }
+
+            @Override
+            protected int resultPlease() {
+                return result;
+            }
+
+            @Override
+            void onResult(Blueprint blueprint, int geodes) {
+                result *= geodes;
+            }
+        };
+    }
+
+
+    private static void refilter(
+            Map<EnumMap<ResourceType, Integer>, List<BuildingSite>> bsByResource,
+            int bestGeodeCount) {
+        for (List<BuildingSite> value : bsByResource.values()) {
             Map<ResourceType, Integer> best = new EnumMap<>(ResourceType.class);
             boolean better = true;
 
@@ -270,21 +240,25 @@ public class Nineteen extends SolutionTemplate<Integer, Integer> {
                 }
             }
 
-            for (BuildingSite buildingSite : value) {
+            Iterator<BuildingSite> iterator = value.iterator();
+            while (iterator.hasNext()) {
+                BuildingSite buildingSite = iterator.next();
+
                 boolean anyBetter = false;
                 boolean anyWorse = false;
                 for (ResourceType resourceType : ResourceType.values()) {
                     anyBetter |= (buildingSite.robots.getOrDefault(resourceType, 0) > best.getOrDefault(resourceType, 0));
                     anyWorse |= (buildingSite.robots.getOrDefault(resourceType, 0) < best.getOrDefault(resourceType, 0));
                 }
-                if (anyBetter || !anyWorse) {
-                    results.add(buildingSite);
+
+                boolean notTheBest = !anyBetter && anyWorse;
+                if (notTheBest) {
+                    iterator.remove();
+                } else if (buildingSite.resources.getOrDefault(ResourceType.Geode, 0) < bestGeodeCount - 2) {
+                    iterator.remove();
                 }
             }
         }
-
-
-        return results;
     }
 
 
@@ -334,18 +308,84 @@ public class Nineteen extends SolutionTemplate<Integer, Integer> {
         throw new IllegalStateException("Unparseable: " + s);
     }
 
-    @Override
-    Solution<Integer> partTwo() {
-        return new Solution<>() {
-            @Override
-            public Integer result() {
-                return 22;
+    private static abstract class RobotPlanOptimiser implements Solution<Integer> {
+        private final List<Blueprint> blueprints = new ArrayList<>();
+        private final int minutes;
+
+        public RobotPlanOptimiser(int minutes) {
+            this.minutes = minutes;
+        }
+
+        @Override
+        public Integer result() {
+            for (Blueprint blueprint : filtered(blueprints)) {
+                Map<EnumMap<ResourceType, Integer>, List<BuildingSite>> byResources = new HashMap<>();
+                BuildingSite site = newBuildingSite(blueprint);
+                byResources.put(site.resources, List.of(site));
+
+                boolean firstObsidian = true;
+                boolean firstGeode = true;
+                int trimNoObsidian = 0;
+                int trimNoGeode = 0;
+
+                for (int i = 0; i < minutes; i++) {
+                    final int timeLeft = minutes - i;
+                    final Map<EnumMap<ResourceType, Integer>, List<BuildingSite>> newResources = new HashMap<>();
+                    final AtomicInteger maxGeodes = new AtomicInteger(0);
+                    byResources
+                            .values()
+                            .stream()
+                            .flatMap(bs -> bs.stream().flatMap(bss -> bss.tickOptions(timeLeft).stream()))
+                            .forEach(buildingSite -> {
+                                newResources.putIfAbsent(buildingSite.resources, new ArrayList<>());
+                                newResources.get(buildingSite.resources).add(buildingSite);
+                                maxGeodes.set(Math.max(maxGeodes.get(), buildingSite.resources.getOrDefault(ResourceType.Geode, 0)));
+                            });
+
+                    refilter(newResources, maxGeodes.get());
+                    byResources = newResources;
+//                    if (trimNoObsidian > 0 && trimNoObsidian == i) {
+//                        trimNoObsidian = 0;
+//                        buildingSites = buildingSites.stream().filter(BuildingSite::hasObsidianRobot).collect(Collectors.toList());
+//                    }
+//                    else if (trimNoGeode > 0 && trimNoGeode == i) {
+//                        trimNoGeode = 0;
+//                        buildingSites = buildingSites.stream().filter(BuildingSite::hasGeodeRobot).collect(Collectors.toList());
+//                    }
+//                    else if (firstObsidian && buildingSites.stream().anyMatch(BuildingSite::hasObsidianRobot)) {
+//                        firstObsidian = false;
+//                        trimNoObsidian = i + 2;
+//                    }
+//                    else if (firstGeode && buildingSites.stream().anyMatch(BuildingSite::hasGeodeRobot)) {
+//                        firstGeode = false;
+//                        trimNoGeode = i + 2;
+//                    }
+//                    else {
+//                        refilter(byResources);
+//                    }
+                    System.out.println("At " + i + " have " + byResources.values().stream().mapToInt(List::size).sum() + " options");
+                }
+
+                int geodude = byResources.values().stream().flatMap(List::stream)
+                        .mapToInt(bs -> bs.resources.getOrDefault(ResourceType.Geode, 0))
+                        .max()
+                        .getAsInt();
+                System.out.println("Blueprint " + blueprint.number + ": " + geodude);
+                onResult(blueprint, geodude);
             }
 
-            @Override
-            public void accept(String s) {
+            return resultPlease();
+        }
 
-            }
-        };
+        protected abstract Iterable<Blueprint> filtered(List<Blueprint> blueprints);
+
+        protected abstract int resultPlease();
+
+        @Override
+        public void accept(String s) {
+            blueprints.add(parse(s));
+        }
+
+        abstract void onResult(Blueprint blueprint, int geodes);
     }
 }
