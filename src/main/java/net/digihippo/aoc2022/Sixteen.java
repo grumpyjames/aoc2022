@@ -107,18 +107,35 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
 
     record Pending(Valve upstream, List<Valve> seen, int distance) implements WorkItem {}
 
-    record Best(Valve v, int score) {}
-
     sealed interface ConsList<T> permits Head, EmptyC {
         int score();
 
         T next();
+
+        List<T> toList();
     }
     record Head<T>(T t, int score, ConsList<T> rest) implements ConsList<T> {
         @Override
         public T next() {
             return t;
         }
+
+        @Override
+        public List<T> toList() {
+            final List<T> res = new ArrayList<>();
+
+            res.add(t);
+            res.addAll(rest.toList());
+
+            return res;
+        }
+
+        @Override
+        public String toString() {
+            return t.toString() + " -> " + rest;
+        }
+
+
     }
     record EmptyC<T>() implements ConsList<T> {
         @Override
@@ -130,6 +147,16 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
         public T next() {
             return null;
         }
+
+        @Override
+        public List<T> toList() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public String toString() {
+            return "{}";
+        }
     }
 
     @Override
@@ -139,10 +166,12 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 int time = 0;
                 Valve currentValve = valves.get("AA");
 
+                ConsList<Valve> bestRoute = findBestScore(currentValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 30 - time);
+                List<Valve> path = bestRoute.toList();
+                Iterator<Valve> iterator = path.iterator();
                 while (time < 30) {
-                    ConsList<Valve> bestScore = findBestScore(currentValve, new HashSet<>(visitWorthyValves()), allShortestPaths, 30 - time);
-                    Valve valve = bestScore.next();
-                    if (valve != null) {
+                    if (iterator.hasNext()) {
+                        Valve valve = iterator.next();
                         int distance = allShortestPaths.get(currentValve).get(valve);
                         time = moveTo(time, distance, valve);
                         time = turnValveOn(time, valve);
@@ -269,6 +298,10 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 }
             }
 
+            if (bestValve == null) {
+                return new EmptyC<>();
+            }
+
             return new Head<>(bestValve, best, bestest);
         }
 
@@ -301,7 +334,7 @@ public class Sixteen extends SolutionTemplate<Integer, Integer> {
                 Map<Valve, Set<Connection>> adjacent,
                 Valve start) {
             final Map<Valve, Integer> distances = new HashMap<>();
-            final Map<Valve, Valve> previous = new HashMap<>();
+            @SuppressWarnings("MismatchedQueryAndUpdateOfCollection") final Map<Valve, Valve> previous = new HashMap<>();
 
             valves.forEach(v -> distances.put(v, Integer.MAX_VALUE));
 
